@@ -858,23 +858,47 @@
       );
     }
 
-    function updateTileHeightsAfterRowResize(columnIndex, rowIndex) {
-      if (!layoutState.tileHeightPx?.[columnIndex]) {
-        recomputeTileHeights();
-        return;
-      }
+    function ensureTileHeightPx() {
+      if (layoutState.tileHeightPx?.length) return;
 
+      layoutState.tileHeightPx = layoutState.columnTileIndexes.map((column, columnIndex) =>
+        column.map((_, rowIndex) =>
+          Math.max(
+            MIN_TILE_HEIGHT,
+            Math.round(weightToHeight(layoutState.rowFlex[columnIndex]?.[rowIndex] ?? 1))
+          )
+        )
+      );
+    }
+
+    function setSharedRowHeightPx(rowIndex, heightPx) {
+      ensureTileHeightPx();
       const next = layoutState.tileHeightPx.map((columnHeights) => [...columnHeights]);
-      next[columnIndex][rowIndex] = Math.max(
+      const safeHeight = Math.max(MIN_TILE_HEIGHT, Math.round(heightPx));
+
+      layoutState.columnTileIndexes.forEach((column, columnIndex) => {
+        if (rowIndex < column.length) {
+          next[columnIndex][rowIndex] = safeHeight;
+        }
+      });
+
+      layoutState.tileHeightPx = next;
+    }
+
+    function updateTileHeightsAfterRowResize(columnIndex, rowIndex) {
+      ensureTileHeightPx();
+
+      const topPx = Math.max(
         MIN_TILE_HEIGHT,
         Math.round(weightToHeight(layoutState.rowFlex[columnIndex][rowIndex]))
       );
-      next[columnIndex][rowIndex + 1] = Math.max(
+      const bottomPx = Math.max(
         MIN_TILE_HEIGHT,
         Math.round(weightToHeight(layoutState.rowFlex[columnIndex][rowIndex + 1]))
       );
 
-      layoutState.tileHeightPx = applyColumnBottomStretch(next, layoutState.columnTileIndexes);
+      setSharedRowHeightPx(rowIndex, topPx);
+      setSharedRowHeightPx(rowIndex + 1, bottomPx);
     }
 
     function swapColumns(fromIndex, toIndex) {
@@ -1050,7 +1074,6 @@
 
     function applyFlexToGrid() {
       const columns = bentoGrid.querySelectorAll(".bento-column");
-      const drag = activeDrag;
 
       columns.forEach((column) => {
         const columnIndex = Number(column.dataset.column);
@@ -1059,16 +1082,6 @@
         const items = column.querySelectorAll(".bento-item");
         items.forEach((item, rowIndex) => {
           const weight = layoutState.rowFlex[columnIndex]?.[rowIndex] ?? 1;
-          const isRowDrag = drag && (drag.type === "row" || drag.type === "corner");
-          const isResizingPair = isRowDrag
-            && columnIndex === drag.columnIndex
-            && (rowIndex === drag.rowIndex || rowIndex === drag.rowIndex + 1);
-
-          if (isResizingPair) {
-            applyTileHeight(item, weight);
-            return;
-          }
-
           applyTileHeightPx(item, getTileHeightPx(columnIndex, rowIndex, weight), weight);
         });
       });
@@ -1491,6 +1504,8 @@
 
       if (!column) return;
 
+      ensureTileHeightPx();
+
       handle.classList.add("is-active");
       handle.setPointerCapture(event.pointerId);
 
@@ -1559,9 +1574,13 @@
         const totalRowFlex = startTopFlex + startBottomFlex;
         const deltaRatio = (event.clientY - startY) / usableHeight;
         const nextTop = clampFlex(startTopFlex + deltaRatio * totalRowFlex, MIN_FLEX, totalRowFlex - MIN_FLEX);
+        const nextBottom = totalRowFlex - nextTop;
 
         layoutState.rowFlex[columnIndex][rowIndex] = nextTop;
-        layoutState.rowFlex[columnIndex][rowIndex + 1] = totalRowFlex - nextTop;
+        layoutState.rowFlex[columnIndex][rowIndex + 1] = nextBottom;
+
+        setSharedRowHeightPx(rowIndex, weightToHeight(nextTop));
+        setSharedRowHeightPx(rowIndex + 1, weightToHeight(nextBottom));
       }
 
       if (type === "col" || type === "corner") {
