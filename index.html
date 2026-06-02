@@ -1,0 +1,1203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bento Grid — Dynamic Layout Tester</title>
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+
+    :root {
+      --max-width: 1600px;
+      --gap: 16px;
+      --radius: 24px;
+      --surface: #f4f7fb;
+      --text: #0f172a;
+      --muted: #64748b;
+      --border: #dbe3ef;
+      --shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+    }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: var(--surface);
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    .page {
+      max-width: calc(var(--max-width) + 48px);
+      margin: 0 auto;
+      padding: 24px 24px 64px;
+    }
+
+    header {
+      margin-bottom: 28px;
+    }
+
+    header h1 {
+      margin: 0 0 8px;
+      font-size: clamp(1.5rem, 2vw, 2rem);
+      font-weight: 700;
+    }
+
+    header p {
+      margin: 0;
+      color: var(--muted);
+      max-width: 72ch;
+    }
+
+    body.is-resizing {
+      cursor: inherit;
+      user-select: none;
+    }
+
+    body.is-resizing *,
+    body.is-column-dragging * {
+      user-select: none;
+    }
+
+    body.is-column-dragging {
+      cursor: grabbing;
+    }
+
+    .controls {
+      display: grid;
+      gap: 16px;
+      padding: 20px;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      margin-bottom: 28px;
+    }
+
+    .controls-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: end;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+      min-width: 180px;
+      flex: 1;
+    }
+
+    .field label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    .field input,
+    .field textarea,
+    .field select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font: inherit;
+      background: #fff;
+    }
+
+    .field textarea {
+      min-height: 120px;
+      resize: vertical;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.85rem;
+    }
+
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 10px 18px;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.15s ease, opacity 0.15s ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #1e4f8f 0%, #2cb8a0 100%);
+      color: #fff;
+    }
+
+    .btn-secondary {
+      background: #e8eef7;
+      color: var(--text);
+    }
+
+    .btn-danger {
+      background: #fee2e2;
+      color: #b91c1c;
+    }
+
+    .hint {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .hint code {
+      background: #eef2f7;
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+    }
+
+    .stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+
+    .stats strong {
+      color: var(--text);
+    }
+
+    .bento-wrap {
+      width: 100%;
+      max-width: var(--max-width);
+      margin: 0 auto;
+    }
+
+    .bento-grid {
+      display: flex;
+      align-items: stretch;
+      gap: var(--gap);
+      width: 100%;
+      min-height: 560px;
+      touch-action: none;
+    }
+
+    .bento-column {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: var(--gap);
+      min-width: 0;
+      flex: 1 1 0%;
+      transition: opacity 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .bento-column.is-dragging {
+      opacity: 0.45;
+      transform: scale(0.985);
+    }
+
+    .bento-column.is-drop-target {
+      box-shadow: inset 0 0 0 3px rgba(44, 184, 160, 0.85);
+      border-radius: var(--radius);
+    }
+
+    .column-drag-handle {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      z-index: 25;
+      display: grid;
+      place-items: center;
+      width: 44px;
+      height: 28px;
+      padding: 0;
+      border: 0;
+      border-radius: 999px;
+      transform: translateX(-50%);
+      background: rgba(15, 23, 42, 0.55);
+      backdrop-filter: blur(6px);
+      color: #fff;
+      font-size: 0.95rem;
+      letter-spacing: 1px;
+      cursor: grab;
+      touch-action: none;
+      opacity: 0;
+      transition: opacity 0.15s ease, background 0.15s ease;
+    }
+
+    .bento-column:hover .column-drag-handle,
+    .column-drag-handle.is-active {
+      opacity: 1;
+    }
+
+    .column-drag-handle:hover {
+      background: rgba(30, 79, 143, 0.85);
+    }
+
+    .column-drag-handle.is-active {
+      cursor: grabbing;
+    }
+
+    .bento-item {
+      position: relative;
+      overflow: hidden;
+      border-radius: var(--radius);
+      background: #fff;
+      box-shadow: var(--shadow);
+      min-height: 80px;
+      flex: 1 1 0%;
+      isolation: isolate;
+    }
+
+    .bento-item.is-resizing {
+      outline: 2px solid rgba(255, 255, 255, 0.85);
+      outline-offset: -2px;
+    }
+
+    .resize-handle {
+      position: absolute;
+      z-index: 20;
+      touch-action: none;
+    }
+
+    .resize-handle::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      margin: auto;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.92);
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.25);
+      opacity: 0;
+      transition: opacity 0.15s ease;
+    }
+
+    .bento-item:hover .resize-handle::after,
+    .resize-handle.is-active::after {
+      opacity: 1;
+    }
+
+    .resize-handle--row {
+      left: 50%;
+      bottom: -10px;
+      width: 56px;
+      height: 20px;
+      transform: translateX(-50%);
+      cursor: ns-resize;
+    }
+
+    .resize-handle--row::after {
+      width: 36px;
+      height: 6px;
+    }
+
+    .resize-handle--col {
+      top: 50%;
+      right: -10px;
+      width: 20px;
+      height: 56px;
+      transform: translateY(-50%);
+      cursor: ew-resize;
+    }
+
+    .resize-handle--col::after {
+      width: 6px;
+      height: 36px;
+    }
+
+    .resize-handle--corner {
+      right: 6px;
+      bottom: 6px;
+      width: 22px;
+      height: 22px;
+      cursor: nwse-resize;
+    }
+
+    .resize-handle--corner::after {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.95);
+    }
+
+    .bento-item__media {
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(180deg, rgba(15, 23, 42, 0.05) 0%, rgba(15, 23, 42, 0.55) 100%),
+        var(--tile-image, linear-gradient(135deg, #93c5fd, #67e8f9));
+      background-size: cover;
+      background-position: center;
+    }
+
+    .bento-item__content {
+      position: absolute;
+      inset: auto 0 0 0;
+      padding: 22px 24px 24px;
+      color: #fff;
+      background: linear-gradient(180deg, rgba(15, 23, 42, 0) 0%, rgba(15, 23, 42, 0.45) 100%);
+    }
+
+    .bento-item__category {
+      margin: 0 0 8px;
+      font-size: 0.82rem;
+      font-weight: 500;
+      opacity: 0.88;
+    }
+
+    .bento-item__title {
+      margin: 0;
+      font-size: clamp(1.05rem, 1.35vw, 1.45rem);
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .bento-item__badge {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: rgba(255, 255, 255, 0.18);
+      backdrop-filter: blur(6px);
+      color: #fff;
+      font-size: 0.95rem;
+    }
+
+    .empty-state {
+      width: 100%;
+      padding: 48px 24px;
+      text-align: center;
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      color: var(--muted);
+      background: #fff;
+    }
+
+    .layout-export {
+      margin-top: 4px;
+    }
+
+    .layout-export textarea {
+      width: 100%;
+      min-height: 72px;
+      margin-top: 8px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.8rem;
+      resize: vertical;
+    }
+
+    @media (max-width: 1024px) {
+      .bento-grid {
+        min-height: 480px;
+      }
+
+      .bento-item {
+        min-height: 100px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .page {
+        padding: 16px 16px 48px;
+      }
+
+      .controls {
+        padding: 16px;
+      }
+
+      .bento-grid {
+        flex-direction: column;
+        min-height: 0;
+      }
+
+      .bento-column {
+        flex: none;
+      }
+
+      .bento-item {
+        flex: none !important;
+        min-height: 220px;
+      }
+
+      .resize-handle {
+        display: none;
+      }
+
+      .column-drag-handle {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <h1>Bento Grid Layout Tester</h1>
+      <p>
+        Drag handles to resize tiles, or drag the <strong>⋮⋮</strong> grip at the top of a column to reorder it.
+        Desktop max width is <strong>1600px</strong>.
+      </p>
+    </header>
+
+    <section class="controls" aria-label="Bento grid controls">
+      <div class="controls-row">
+        <div class="field">
+          <label for="itemCount">Number of boxes</label>
+          <input id="itemCount" type="number" min="0" max="24" value="10" />
+        </div>
+        <div class="field">
+          <label for="preset">Quick preset</label>
+          <select id="preset">
+            <option value="demo10" selected>Demo — 10 tiles (reference)</option>
+            <option value="demo7">Demo — 7 tiles</option>
+            <option value="count">Use count only</option>
+            <option value="custom">Custom JSON</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field" id="jsonField" hidden>
+        <label for="customJson">Custom tiles JSON</label>
+        <textarea id="customJson" spellcheck="false"></textarea>
+        <p class="hint">
+          Array of objects: <code>{ "title": "...", "category": "...", "description": "...", "image": "url", "weight": 4 }</code>.
+          Omit weight to auto-size.
+        </p>
+      </div>
+
+      <div class="btn-row">
+        <button type="button" class="btn-primary" id="renderBtn">Render grid</button>
+        <button type="button" class="btn-secondary" id="addBtn">+ Add one box</button>
+        <button type="button" class="btn-danger" id="removeBtn">− Remove last box</button>
+        <button type="button" class="btn-secondary" id="resetBtn">Reset to demo</button>
+        <button type="button" class="btn-secondary" id="resetLayoutBtn">Reset sizes</button>
+        <button type="button" class="btn-secondary" id="copyLayoutBtn">Copy layout JSON</button>
+      </div>
+
+      <div class="stats" id="stats"></div>
+      <div class="layout-export" id="layoutExport" hidden>
+        <label class="hint" for="layoutJson">Current layout weights</label>
+        <textarea id="layoutJson" readonly spellcheck="false"></textarea>
+      </div>
+    </section>
+
+    <div class="bento-wrap">
+      <div class="bento-grid" id="bentoGrid" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <script>
+    const DEMO_10 = [
+      { category: "Cloud", title: "Cloud Services", image: "linear-gradient(135deg, #64748b 0%, #334155 100%)" },
+      { category: "AI", title: "AI Contact Center", image: "linear-gradient(135deg, #475569 0%, #1e293b 100%)" },
+      { category: "Energy", title: "Energy Management Solution", image: "linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%)" },
+      { category: "Cybersecurity", title: "Managed Cybersecurity Services", image: "linear-gradient(135deg, #1d4ed8 0%, #1e3a8a 100%)" },
+      { category: "Broadband", title: "Business Broadband", image: "linear-gradient(135deg, #38bdf8 0%, #2563eb 100%)" },
+      { category: "Digital Signage", title: "Digital Signage Display", image: "linear-gradient(135deg, #06b6d4 0%, #0e7490 100%)" },
+      { category: "Exchange", title: "HKT SkyExchange", image: "linear-gradient(135deg, #0891b2 0%, #155e75 100%)" },
+      { category: "Smart Office", title: "Smart Office", image: "linear-gradient(135deg, #2563eb 0%, #1e40af 100%)" },
+      { category: "Smart Building", title: "Smart Building", image: "linear-gradient(135deg, #14b8a6 0%, #0f766e 100%)" },
+      { category: "Enterprise", title: "Enterprise Managed Services", image: "linear-gradient(135deg, #6366f1 0%, #4338ca 100%)" }
+    ];
+
+    const DEMO_7 = [
+      { category: "Mobility", title: "AI Contactless Car Park", image: "linear-gradient(135deg, #64748b 0%, #334155 100%)" },
+      { category: "Events", title: "Smart Event Management", image: "linear-gradient(135deg, #475569 0%, #1e293b 100%)" },
+      { category: "Highlights", title: "A Year of Breakthroughs and Excellence", image: "linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%)" },
+      { category: "Connectivity", title: "5G MESH Wi-Fi Solution", image: "linear-gradient(135deg, #38bdf8 0%, #1d4ed8 100%)" },
+      { category: "Convergence", title: "Fixed and Mobile Convergence (FMC) Solutions", image: "linear-gradient(135deg, #06b6d4 0%, #0e7490 100%)" },
+      { category: "IT", title: "Managed IT Services", image: "linear-gradient(135deg, #2563eb 0%, #1e40af 100%)" },
+      { category: "Security", title: "Managed Network Security Solution", image: "linear-gradient(135deg, #0891b2 0%, #155e75 100%)" }
+    ];
+
+    const PLACEHOLDER_GRADIENTS = [
+      "linear-gradient(135deg, #60a5fa 0%, #2563eb 100%)",
+      "linear-gradient(135deg, #22d3ee 0%, #0891b2 100%)",
+      "linear-gradient(135deg, #34d399 0%, #059669 100%)",
+      "linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%)",
+      "linear-gradient(135deg, #f472b6 0%, #db2777 100%)",
+      "linear-gradient(135deg, #fb923c 0%, #ea580c 100%)"
+    ];
+
+    const WEIGHT_PATTERNS = {
+      1: [[12]],
+      2: [[7, 5], [5, 7], [6, 6]],
+      3: [[5, 4, 3], [3, 5, 4], [4, 3, 5]],
+      4: [[4, 3, 3, 2], [3, 4, 3, 2], [3, 3, 4, 2], [3, 3, 3, 3]],
+      5: [[3, 3, 2, 2, 2], [2, 3, 3, 2, 2], [3, 2, 3, 2, 2]],
+      6: [[2, 2, 2, 2, 2, 2], [3, 2, 2, 2, 2, 1]],
+      7: [[2, 2, 2, 2, 2, 1, 1], [2, 2, 2, 2, 1, 2, 1]],
+      8: [[2, 2, 2, 2, 1, 1, 1, 1]]
+    };
+
+    const itemCountInput = document.getElementById("itemCount");
+    const presetSelect = document.getElementById("preset");
+    const jsonField = document.getElementById("jsonField");
+    const customJsonInput = document.getElementById("customJson");
+    const bentoGrid = document.getElementById("bentoGrid");
+    const stats = document.getElementById("stats");
+    const layoutExport = document.getElementById("layoutExport");
+    const layoutJson = document.getElementById("layoutJson");
+
+    const MIN_FLEX = 0.08;
+    let layoutState = { key: "", columnFlex: [], rowFlex: [], columnTileIndexes: [] };
+    let activeDrag = null;
+    let columnDrag = null;
+    let currentTiles = [];
+    let currentColumnCount = 3;
+
+    function getColumnCount() {
+      if (window.matchMedia("(max-width: 640px)").matches) return 1;
+      if (window.matchMedia("(max-width: 1024px)").matches) return 2;
+      return 3;
+    }
+
+    function isEditableLayout() {
+      return getColumnCount() > 1;
+    }
+
+    function getLayoutKey(tiles, columnCount) {
+      return `${tiles.length}-${columnCount}`;
+    }
+
+    function makeGenericTile(index) {
+      return {
+        category: `Category ${index + 1}`,
+        title: `Tile ${index + 1}`,
+        description: "Auto-generated placeholder content for layout testing.",
+        image: PLACEHOLDER_GRADIENTS[index % PLACEHOLDER_GRADIENTS.length]
+      };
+    }
+
+    function buildTilesFromCount(count) {
+      return Array.from({ length: count }, (_, index) => makeGenericTile(index));
+    }
+
+    function distributeToColumns(count, columnCount) {
+      const columns = Array.from({ length: columnCount }, () => []);
+      const base = Math.floor(count / columnCount);
+      const extra = count % columnCount;
+      let tileIndex = 0;
+
+      for (let column = 0; column < columnCount; column += 1) {
+        const size = base + (column < extra ? 1 : 0);
+        for (let i = 0; i < size; i += 1) {
+          columns[column].push(tileIndex);
+          tileIndex += 1;
+        }
+      }
+
+      return columns;
+    }
+
+    function getColumnWeights(itemCount, columnIndex) {
+      const patterns = WEIGHT_PATTERNS[itemCount] ?? WEIGHT_PATTERNS[Math.min(itemCount, 8)];
+      const pattern = patterns[columnIndex % patterns.length];
+      const total = pattern.reduce((sum, weight) => sum + weight, 0);
+
+      if (total === 12) {
+        return pattern;
+      }
+
+      const scale = 12 / total;
+      const scaled = pattern.map((weight) => Math.max(1, Math.round(weight * scale)));
+      const diff = 12 - scaled.reduce((sum, weight) => sum + weight, 0);
+
+      if (diff !== 0) {
+        scaled[0] += diff;
+      }
+
+      return scaled;
+    }
+
+    function buildDefaultLayoutState(tiles, columnCount) {
+      const columnTileIndexes = distributeToColumns(tiles.length, columnCount);
+
+      return {
+        key: getLayoutKey(tiles, columnCount),
+        columnFlex: Array(columnCount).fill(1),
+        rowFlex: columnTileIndexes.map((tileIndexes, columnIndex) => {
+          const weights = getColumnWeights(tileIndexes.length, columnIndex);
+          return tileIndexes.map((tileIndex, position) => tiles[tileIndex].weight ?? weights[position] ?? 1);
+        }),
+        columnTileIndexes
+      };
+    }
+
+    function ensureLayoutState(tiles, columnCount, forceReset = false) {
+      const key = getLayoutKey(tiles, columnCount);
+
+      if (forceReset || layoutState.key !== key) {
+        layoutState = buildDefaultLayoutState(tiles, columnCount);
+        return layoutState;
+      }
+
+      const defaultState = buildDefaultLayoutState(tiles, columnCount);
+
+      if (layoutState.columnTileIndexes.length !== columnCount) {
+        layoutState.columnTileIndexes = defaultState.columnTileIndexes;
+        layoutState.rowFlex = defaultState.rowFlex;
+        layoutState.columnFlex = defaultState.columnFlex;
+      }
+
+      return layoutState;
+    }
+
+    function swapColumns(fromIndex, toIndex) {
+      if (fromIndex === toIndex) return;
+
+      const swap = (array) => {
+        [array[fromIndex], array[toIndex]] = [array[toIndex], array[fromIndex]];
+      };
+
+      swap(layoutState.columnTileIndexes);
+      swap(layoutState.rowFlex);
+      swap(layoutState.columnFlex);
+    }
+
+    function getColumnIndexAtX(clientX) {
+      const columns = [...bentoGrid.querySelectorAll(".bento-column")];
+      if (!columns.length) return 0;
+
+      let closestIndex = 0;
+      let closestDistance = Number.POSITIVE_INFINITY;
+
+      columns.forEach((column, index) => {
+        const rect = column.getBoundingClientRect();
+        const center = rect.left + rect.width / 2;
+        const distance = Math.abs(clientX - center);
+
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestIndex = index;
+        }
+      });
+
+      return closestIndex;
+    }
+
+    function updateColumnDropTargets(overIndex, fromIndex) {
+      bentoGrid.querySelectorAll(".bento-column").forEach((column, index) => {
+        column.classList.toggle("is-drop-target", index === overIndex && overIndex !== fromIndex);
+        column.classList.toggle("is-dragging", index === fromIndex);
+      });
+    }
+
+    function clearColumnDropTargets() {
+      bentoGrid.querySelectorAll(".bento-column").forEach((column) => {
+        column.classList.remove("is-drop-target", "is-dragging");
+      });
+      document.querySelectorAll(".column-drag-handle.is-active").forEach((handle) => {
+        handle.classList.remove("is-active");
+      });
+    }
+
+    function clampFlex(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
+
+    function applyFlexToGrid() {
+      const columns = bentoGrid.querySelectorAll(".bento-column");
+
+      columns.forEach((column, columnIndex) => {
+        column.style.flex = `${layoutState.columnFlex[columnIndex] ?? 1} 1 0%`;
+
+        const items = column.querySelectorAll(".bento-item");
+        items.forEach((item, rowIndex) => {
+          item.style.flex = `${layoutState.rowFlex[columnIndex]?.[rowIndex] ?? 1} 1 0%`;
+        });
+      });
+    }
+
+    function getLayoutSnapshot() {
+      return {
+        columnFlex: layoutState.columnFlex.map((value) => Number(value.toFixed(3))),
+        rowFlex: layoutState.rowFlex.map((column) => column.map((value) => Number(value.toFixed(3)))),
+        columnTileIndexes: layoutState.columnTileIndexes.map((column) => [...column])
+      };
+    }
+
+    function updateLayoutExport() {
+      if (!isEditableLayout() || !currentTiles.length) {
+        layoutExport.hidden = true;
+        return;
+      }
+
+      layoutExport.hidden = false;
+      layoutJson.value = JSON.stringify(getLayoutSnapshot(), null, 2);
+    }
+
+    function getDemoTiles(preset, count) {
+      const source = preset === "demo7" ? DEMO_7 : DEMO_10;
+      return source.slice(0, count || source.length).map((tile, index) => ({
+        ...makeGenericTile(index),
+        ...tile,
+        category: tile.category ?? `Category ${index + 1}`,
+        description: tile.description ?? ""
+      }));
+    }
+
+    function parseCustomTiles(raw) {
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        throw new Error("Custom JSON must be an array of tile objects.");
+      }
+
+      return parsed.map((tile, index) => ({
+        category: tile.category ?? `Category ${index + 1}`,
+        title: tile.title ?? `Tile ${index + 1}`,
+        description: tile.description ?? "",
+        image: tile.image ?? PLACEHOLDER_GRADIENTS[index % PLACEHOLDER_GRADIENTS.length],
+        weight: tile.weight
+      }));
+    }
+
+    function resolveTiles() {
+      const preset = presetSelect.value;
+      const count = Math.max(0, Math.min(24, Number(itemCountInput.value) || 0));
+      itemCountInput.value = String(count);
+
+      if (preset === "custom") {
+        return parseCustomTiles(customJsonInput.value);
+      }
+
+      if (preset === "demo10" || preset === "demo7") {
+        return getDemoTiles(preset, count || (preset === "demo7" ? DEMO_7.length : DEMO_10.length));
+      }
+
+      return buildTilesFromCount(count);
+    }
+
+    function getGridHeight(tileCount, columnCount) {
+      if (columnCount === 1) {
+        return null;
+      }
+
+      const rows = Math.ceil(tileCount / columnCount);
+      return Math.min(920, Math.max(520, 420 + rows * 90));
+    }
+
+    function renderTile(tile, index, columnIndex, rowIndex, columnCount, rowCount) {
+      const article = document.createElement("article");
+      article.className = "bento-item";
+      article.dataset.column = String(columnIndex);
+      article.dataset.row = String(rowIndex);
+      article.style.flex = `${layoutState.rowFlex[columnIndex]?.[rowIndex] ?? tile.weight ?? 1} 1 0%`;
+
+      const media = document.createElement("div");
+      media.className = "bento-item__media";
+      media.style.setProperty(
+        "--tile-image",
+        tile.image?.startsWith("http") ? `url("${tile.image}")` : tile.image
+      );
+
+      const badge = document.createElement("span");
+      badge.className = "bento-item__badge";
+      badge.textContent = "↗";
+      badge.setAttribute("aria-hidden", "true");
+
+      const content = document.createElement("div");
+      content.className = "bento-item__content";
+
+      const category = document.createElement("p");
+      category.className = "bento-item__category";
+      category.textContent = tile.category ?? tile.description ?? `Tile ${index + 1}`;
+
+      const title = document.createElement("h2");
+      title.className = "bento-item__title";
+      title.textContent = tile.title;
+
+      content.append(category, title);
+      article.append(media, badge, content);
+
+      if (isEditableLayout()) {
+        if (rowIndex < rowCount - 1) {
+          article.appendChild(createResizeHandle("row", columnIndex, rowIndex));
+        }
+
+        if (columnIndex < columnCount - 1) {
+          article.appendChild(createResizeHandle("col", columnIndex, rowIndex));
+        }
+
+        if (rowIndex < rowCount - 1 && columnIndex < columnCount - 1) {
+          article.appendChild(createResizeHandle("corner", columnIndex, rowIndex));
+        }
+      }
+
+      return article;
+    }
+
+    function createColumnDragHandle(columnIndex) {
+      const handle = document.createElement("button");
+      handle.type = "button";
+      handle.className = "column-drag-handle";
+      handle.textContent = "⋮⋮";
+      handle.setAttribute("aria-label", `Drag column ${columnIndex + 1} to reorder`);
+      handle.dataset.column = String(columnIndex);
+      handle.addEventListener("pointerdown", startColumnDrag);
+      return handle;
+    }
+
+    function startColumnDrag(event) {
+      if (!isEditableLayout() || activeDrag) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const handle = event.currentTarget;
+      const fromIndex = Number(handle.dataset.column);
+
+      handle.classList.add("is-active");
+      handle.setPointerCapture(event.pointerId);
+
+      columnDrag = {
+        pointerId: event.pointerId,
+        handle,
+        fromIndex,
+        overIndex: fromIndex
+      };
+
+      updateColumnDropTargets(fromIndex, fromIndex);
+      document.body.classList.add("is-column-dragging");
+    }
+
+    function onColumnDragMove(event) {
+      if (!columnDrag || event.pointerId !== columnDrag.pointerId) return;
+
+      const overIndex = getColumnIndexAtX(event.clientX);
+
+      if (overIndex !== columnDrag.overIndex) {
+        columnDrag.overIndex = overIndex;
+        updateColumnDropTargets(overIndex, columnDrag.fromIndex);
+      }
+    }
+
+    function endColumnDrag(event) {
+      if (!columnDrag || event.pointerId !== columnDrag.pointerId) return;
+
+      const { fromIndex, overIndex, handle } = columnDrag;
+
+      try {
+        handle.releasePointerCapture(event.pointerId);
+      } catch (_) {
+        /* ignore */
+      }
+
+      const shouldSwap = fromIndex !== overIndex;
+      columnDrag = null;
+      document.body.classList.remove("is-column-dragging");
+      clearColumnDropTargets();
+
+      if (shouldSwap) {
+        swapColumns(fromIndex, overIndex);
+        renderGrid({ preserveLayout: true });
+      }
+    }
+
+    function createResizeHandle(type, columnIndex, rowIndex) {
+      const handle = document.createElement("button");
+      handle.type = "button";
+      handle.className = `resize-handle resize-handle--${type === "corner" ? "corner" : type === "col" ? "col" : "row"}`;
+      handle.setAttribute("aria-label", type === "corner"
+        ? "Resize tile width and height"
+        : type === "col"
+          ? "Resize column width"
+          : "Resize tile height");
+      handle.dataset.type = type;
+      handle.dataset.column = String(columnIndex);
+      handle.dataset.row = String(rowIndex);
+      handle.addEventListener("pointerdown", startDrag);
+      return handle;
+    }
+
+    function startDrag(event) {
+      if (!isEditableLayout() || columnDrag) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const handle = event.currentTarget;
+      const type = handle.dataset.type;
+      const columnIndex = Number(handle.dataset.column);
+      const rowIndex = Number(handle.dataset.row);
+      const column = bentoGrid.querySelector(`.bento-column[data-column="${columnIndex}"]`);
+
+      if (!column) return;
+
+      handle.classList.add("is-active");
+      handle.setPointerCapture(event.pointerId);
+
+      const items = [...column.querySelectorAll(".bento-item")];
+      const columnRect = column.getBoundingClientRect();
+      const gridRect = bentoGrid.getBoundingClientRect();
+      const gap = parseFloat(getComputedStyle(bentoGrid).gap) || 16;
+
+      activeDrag = {
+        pointerId: event.pointerId,
+        type,
+        handle,
+        columnIndex,
+        rowIndex,
+        startX: event.clientX,
+        startY: event.clientY,
+        columnRect,
+        gridRect,
+        gap,
+        startTopFlex: layoutState.rowFlex[columnIndex][rowIndex],
+        startBottomFlex: layoutState.rowFlex[columnIndex][rowIndex + 1] ?? null,
+        startLeftColFlex: layoutState.columnFlex[columnIndex],
+        startRightColFlex: layoutState.columnFlex[columnIndex + 1] ?? null,
+        items
+      };
+
+      items[rowIndex]?.classList.add("is-resizing");
+      if (type !== "col") {
+        items[rowIndex + 1]?.classList.add("is-resizing");
+      }
+
+      document.body.classList.add("is-resizing");
+      document.body.style.cursor = handle.style.cursor || "grabbing";
+    }
+
+    function onDragMove(event) {
+      if (!activeDrag || event.pointerId !== activeDrag.pointerId) return;
+
+      const {
+        type,
+        columnIndex,
+        rowIndex,
+        startX,
+        startY,
+        columnRect,
+        gridRect,
+        gap,
+        startTopFlex,
+        startBottomFlex,
+        startLeftColFlex,
+        startRightColFlex
+      } = activeDrag;
+
+      if (type === "row" || type === "corner") {
+        const rowGapTotal = gap * (layoutState.rowFlex[columnIndex].length - 1);
+        const usableHeight = columnRect.height - rowGapTotal;
+        const totalRowFlex = startTopFlex + startBottomFlex;
+        const deltaRatio = (event.clientY - startY) / usableHeight;
+        const nextTop = clampFlex(startTopFlex + deltaRatio * totalRowFlex, MIN_FLEX, totalRowFlex - MIN_FLEX);
+
+        layoutState.rowFlex[columnIndex][rowIndex] = nextTop;
+        layoutState.rowFlex[columnIndex][rowIndex + 1] = totalRowFlex - nextTop;
+      }
+
+      if (type === "col" || type === "corner") {
+        const colGapTotal = gap * (layoutState.columnFlex.length - 1);
+        const usableWidth = gridRect.width - colGapTotal;
+        const totalColFlex = startLeftColFlex + startRightColFlex;
+        const deltaRatio = (event.clientX - startX) / usableWidth;
+        const nextLeft = clampFlex(startLeftColFlex + deltaRatio * totalColFlex, MIN_FLEX, totalColFlex - MIN_FLEX);
+
+        layoutState.columnFlex[columnIndex] = nextLeft;
+        layoutState.columnFlex[columnIndex + 1] = totalColFlex - nextLeft;
+      }
+
+      applyFlexToGrid();
+      updateLayoutExport();
+    }
+
+    function endDrag(event) {
+      if (!activeDrag || event.pointerId !== activeDrag.pointerId) return;
+
+      activeDrag.handle.classList.remove("is-active");
+      activeDrag.items.forEach((item) => item.classList.remove("is-resizing"));
+
+      try {
+        activeDrag.handle.releasePointerCapture(event.pointerId);
+      } catch (_) {
+        /* ignore */
+      }
+
+      activeDrag = null;
+      document.body.classList.remove("is-resizing");
+      document.body.style.cursor = "";
+    }
+
+    document.addEventListener("pointermove", (event) => {
+      onDragMove(event);
+      onColumnDragMove(event);
+    });
+    document.addEventListener("pointerup", (event) => {
+      endDrag(event);
+      endColumnDrag(event);
+    });
+    document.addEventListener("pointercancel", (event) => {
+      endDrag(event);
+      endColumnDrag(event);
+    });
+
+    function renderGrid(options = {}) {
+      const { forceResetLayout = false, preserveLayout = false } = options;
+
+      if (activeDrag || columnDrag) return;
+
+      bentoGrid.innerHTML = "";
+
+      let tiles;
+      try {
+        tiles = resolveTiles();
+      } catch (error) {
+        bentoGrid.innerHTML = `<div class="empty-state">${error.message}</div>`;
+        stats.innerHTML = `<span><strong>Error:</strong> invalid custom JSON</span>`;
+        layoutExport.hidden = true;
+        return;
+      }
+
+      if (!tiles.length) {
+        bentoGrid.innerHTML = `<div class="empty-state">No tiles to display. Increase the box count or load a demo preset.</div>`;
+        stats.innerHTML = `<span><strong>0</strong> tiles rendered</span>`;
+        layoutExport.hidden = true;
+        return;
+      }
+
+      currentTiles = tiles;
+      currentColumnCount = getColumnCount();
+
+      if (!preserveLayout) {
+        ensureLayoutState(tiles, currentColumnCount, forceResetLayout);
+      }
+
+      const gridHeight = getGridHeight(tiles.length, currentColumnCount);
+
+      bentoGrid.style.minHeight = gridHeight ? `${gridHeight}px` : "";
+
+      layoutState.columnTileIndexes.forEach((tileIndexes, columnIndex) => {
+        const column = document.createElement("div");
+        column.className = "bento-column";
+        column.dataset.column = String(columnIndex);
+        column.style.flex = `${layoutState.columnFlex[columnIndex] ?? 1} 1 0%`;
+
+        if (isEditableLayout()) {
+          column.appendChild(createColumnDragHandle(columnIndex));
+        }
+
+        tileIndexes.forEach((tileIndex, rowIndex) => {
+          const tile = {
+            ...tiles[tileIndex],
+            weight: layoutState.rowFlex[columnIndex]?.[rowIndex] ?? 1
+          };
+
+          column.appendChild(renderTile(
+            tile,
+            tileIndex,
+            columnIndex,
+            rowIndex,
+            currentColumnCount,
+            tileIndexes.length
+          ));
+        });
+
+        bentoGrid.appendChild(column);
+      });
+
+      const columnSizes = layoutState.columnTileIndexes.map((column) => column.length).join(" + ");
+      const editHint = isEditableLayout()
+        ? "Resize with edge handles · reorder columns with ⋮⋮ grip"
+        : "Editing disabled on mobile";
+
+      stats.innerHTML = `
+        <span><strong>${tiles.length}</strong> tile${tiles.length === 1 ? "" : "s"} rendered</span>
+        <span>Columns: <strong>${currentColumnCount}</strong> (${columnSizes})</span>
+        <span>${editHint}</span>
+      `;
+
+      updateLayoutExport();
+    }
+
+    function toggleJsonField() {
+      const isCustom = presetSelect.value === "custom";
+      jsonField.hidden = !isCustom;
+      if (isCustom && !customJsonInput.value.trim()) {
+        customJsonInput.value = JSON.stringify(DEMO_10, null, 2);
+      }
+    }
+
+    document.getElementById("renderBtn").addEventListener("click", () => renderGrid({ forceResetLayout: true }));
+    document.getElementById("addBtn").addEventListener("click", () => {
+      itemCountInput.value = String(Math.min(24, Number(itemCountInput.value) + 1));
+      if (presetSelect.value.startsWith("demo")) presetSelect.value = "count";
+      renderGrid();
+    });
+    document.getElementById("removeBtn").addEventListener("click", () => {
+      itemCountInput.value = String(Math.max(0, Number(itemCountInput.value) - 1));
+      if (presetSelect.value.startsWith("demo")) presetSelect.value = "count";
+      renderGrid();
+    });
+    document.getElementById("resetBtn").addEventListener("click", () => {
+      presetSelect.value = "demo10";
+      itemCountInput.value = "10";
+      toggleJsonField();
+      renderGrid({ forceResetLayout: true });
+    });
+    document.getElementById("resetLayoutBtn").addEventListener("click", () => {
+      renderGrid({ forceResetLayout: true });
+    });
+    document.getElementById("copyLayoutBtn").addEventListener("click", async () => {
+      updateLayoutExport();
+      const payload = layoutJson.value;
+      try {
+        await navigator.clipboard.writeText(payload);
+        stats.innerHTML += `<span><strong>Layout copied</strong></span>`;
+      } catch (_) {
+        layoutJson.select();
+        document.execCommand("copy");
+      }
+    });
+
+    itemCountInput.addEventListener("change", () => {
+      if (presetSelect.value.startsWith("demo")) presetSelect.value = "count";
+      renderGrid();
+    });
+
+    presetSelect.addEventListener("change", () => {
+      toggleJsonField();
+      if (presetSelect.value === "demo10") itemCountInput.value = "10";
+      if (presetSelect.value === "demo7") itemCountInput.value = "7";
+      renderGrid({ forceResetLayout: true });
+    });
+
+    customJsonInput.addEventListener("input", () => {
+      presetSelect.value = "custom";
+      toggleJsonField();
+    });
+
+    let resizeTimer;
+    window.addEventListener("resize", () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        const nextColumnCount = getColumnCount();
+        renderGrid({ forceResetLayout: nextColumnCount !== currentColumnCount });
+      }, 120);
+    });
+
+    toggleJsonField();
+    renderGrid();
+  </script>
+</body>
+</html>
