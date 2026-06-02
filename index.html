@@ -405,12 +405,105 @@
       resize: vertical;
     }
 
+    .view-toggle {
+      display: inline-flex;
+      padding: 4px;
+      background: #e8eef7;
+      border-radius: 999px;
+      gap: 4px;
+    }
+
+    .view-toggle__btn {
+      border: 0;
+      border-radius: 999px;
+      padding: 8px 18px;
+      font: inherit;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: transparent;
+      color: var(--muted);
+      transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .view-toggle__btn:hover {
+      color: var(--text);
+      transform: none;
+    }
+
+    .view-toggle__btn.is-active {
+      background: #fff;
+      color: var(--text);
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+    }
+
+    .preview-stage {
+      width: 100%;
+      margin: 0 auto;
+      transition: max-width 0.25s ease, padding 0.25s ease;
+    }
+
+    .preview-stage__chrome {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    .preview-stage__dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #cbd5e1;
+    }
+
+    .preview-stage--desktop {
+      max-width: var(--max-width);
+    }
+
+    .preview-stage--mobile {
+      max-width: 390px;
+      padding: 14px;
+      background: #0f172a;
+      border-radius: 28px;
+      box-shadow: 0 20px 50px rgba(15, 23, 42, 0.18);
+    }
+
+    .preview-stage--mobile .preview-stage__chrome {
+      color: rgba(255, 255, 255, 0.72);
+    }
+
+    .preview-stage--mobile .preview-stage__dot {
+      background: rgba(255, 255, 255, 0.35);
+    }
+
+    .preview-stage--mobile .bento-wrap {
+      max-width: none;
+    }
+
+    .preview-stage--mobile .bento-grid {
+      min-height: 560px;
+    }
+
+    .preview-stage--mobile .bento-item {
+      min-height: 90px;
+    }
+
+    .preview-stage--mobile .resize-handle,
+    .preview-stage--mobile .column-drag-handle {
+      display: none;
+    }
+
     @media (max-width: 1024px) {
-      .bento-grid {
+      .preview-stage--desktop .bento-grid {
         min-height: 480px;
       }
 
-      .bento-item {
+      .preview-stage--desktop .bento-item {
         min-height: 100px;
       }
     }
@@ -424,25 +517,22 @@
         padding: 16px;
       }
 
-      .bento-grid {
+      .preview-stage--desktop .bento-grid {
         flex-direction: column;
         min-height: 0;
       }
 
-      .bento-column {
+      .preview-stage--desktop .bento-column {
         flex: none;
       }
 
-      .bento-item {
+      .preview-stage--desktop .bento-item {
         flex: none !important;
         min-height: 220px;
       }
 
-      .resize-handle {
-        display: none;
-      }
-
-      .column-drag-handle {
+      .preview-stage--desktop .resize-handle,
+      .preview-stage--desktop .column-drag-handle {
         display: none;
       }
     }
@@ -453,8 +543,8 @@
     <header>
       <h1>Bento Grid Layout Tester</h1>
       <p>
-        Drag handles to resize tiles, or drag the <strong>⋮⋮</strong> grip at the top of a column to reorder it.
-        Desktop max width is <strong>1600px</strong>.
+        Use <strong>Desktop</strong> or <strong>Mobile</strong> preview to switch layouts. On desktop, drag handles
+        to resize tiles or <strong>⋮⋮</strong> to reorder columns.
       </p>
     </header>
 
@@ -472,6 +562,13 @@
             <option value="count">Use count only</option>
             <option value="custom">Custom JSON</option>
           </select>
+        </div>
+        <div class="field">
+          <label>Preview</label>
+          <div class="view-toggle" role="group" aria-label="Preview mode">
+            <button type="button" class="view-toggle__btn is-active" data-view="desktop" id="viewDesktop">Desktop</button>
+            <button type="button" class="view-toggle__btn" data-view="mobile" id="viewMobile">Mobile</button>
+          </div>
         </div>
       </div>
 
@@ -500,8 +597,15 @@
       </div>
     </section>
 
-    <div class="bento-wrap">
-      <div class="bento-grid" id="bentoGrid" aria-live="polite"></div>
+    <div class="preview-stage preview-stage--desktop" id="previewStage">
+      <div class="preview-stage__chrome" id="previewLabel">
+        <span class="preview-stage__dot"></span>
+        Desktop · 1600px
+        <span class="preview-stage__dot"></span>
+      </div>
+      <div class="bento-wrap">
+        <div class="bento-grid" id="bentoGrid" aria-live="polite"></div>
+      </div>
     </div>
   </div>
 
@@ -557,8 +661,13 @@
     const stats = document.getElementById("stats");
     const layoutExport = document.getElementById("layoutExport");
     const layoutJson = document.getElementById("layoutJson");
+    const previewStage = document.getElementById("previewStage");
+    const previewLabel = document.getElementById("previewLabel");
+    const viewDesktopBtn = document.getElementById("viewDesktop");
+    const viewMobileBtn = document.getElementById("viewMobile");
 
     const MIN_FLEX = 0.08;
+    let previewMode = window.matchMedia("(max-width: 640px)").matches ? "mobile" : "desktop";
     let layoutState = { key: "", columnFlex: [], rowFlex: [], columnTileIndexes: [] };
     let activeDrag = null;
     let columnDrag = null;
@@ -566,17 +675,31 @@
     let currentColumnCount = 3;
 
     function getColumnCount() {
-      if (window.matchMedia("(max-width: 640px)").matches) return 1;
-      if (window.matchMedia("(max-width: 1024px)").matches) return 2;
-      return 3;
+      return previewMode === "mobile" ? 2 : 3;
     }
 
     function isEditableLayout() {
-      return getColumnCount() > 1;
+      return previewMode === "desktop";
     }
 
     function getLayoutKey(tiles, columnCount) {
-      return `${tiles.length}-${columnCount}`;
+      return `${previewMode}-${tiles.length}-${columnCount}`;
+    }
+
+    function updatePreviewChrome() {
+      previewStage.className = `preview-stage preview-stage--${previewMode}`;
+      viewDesktopBtn.classList.toggle("is-active", previewMode === "desktop");
+      viewMobileBtn.classList.toggle("is-active", previewMode === "mobile");
+      previewLabel.innerHTML = previewMode === "mobile"
+        ? '<span class="preview-stage__dot"></span> Mobile · 390px <span class="preview-stage__dot"></span>'
+        : '<span class="preview-stage__dot"></span> Desktop · 1600px <span class="preview-stage__dot"></span>';
+    }
+
+    function setPreviewMode(mode) {
+      if (previewMode === mode) return;
+      previewMode = mode;
+      updatePreviewChrome();
+      renderGrid();
     }
 
     function makeGenericTile(index) {
@@ -1117,13 +1240,13 @@
       });
 
       const columnSizes = layoutState.columnTileIndexes.map((column) => column.length).join(" + ");
-      const editHint = isEditableLayout()
+      const editHint = previewMode === "desktop"
         ? "Resize with edge handles · reorder columns with ⋮⋮ grip"
-        : "Editing disabled on mobile";
+        : "Mobile preview · 2 columns · view only";
 
       stats.innerHTML = `
         <span><strong>${tiles.length}</strong> tile${tiles.length === 1 ? "" : "s"} rendered</span>
-        <span>Columns: <strong>${currentColumnCount}</strong> (${columnSizes})</span>
+        <span>Preview: <strong>${previewMode}</strong> · Columns: <strong>${currentColumnCount}</strong> (${columnSizes})</span>
         <span>${editHint}</span>
       `;
 
@@ -1137,6 +1260,9 @@
         customJsonInput.value = JSON.stringify(DEMO_10, null, 2);
       }
     }
+
+    viewDesktopBtn.addEventListener("click", () => setPreviewMode("desktop"));
+    viewMobileBtn.addEventListener("click", () => setPreviewMode("mobile"));
 
     document.getElementById("renderBtn").addEventListener("click", () => renderGrid({ forceResetLayout: true }));
     document.getElementById("addBtn").addEventListener("click", () => {
@@ -1187,15 +1313,7 @@
       toggleJsonField();
     });
 
-    let resizeTimer;
-    window.addEventListener("resize", () => {
-      clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(() => {
-        const nextColumnCount = getColumnCount();
-        renderGrid({ forceResetLayout: nextColumnCount !== currentColumnCount });
-      }, 120);
-    });
-
+    updatePreviewChrome();
     toggleJsonField();
     renderGrid();
   </script>
