@@ -15,6 +15,7 @@
       --max-width: 1600px;
       --gap: 16px;
       --radius: 24px;
+      --tile-unit: 140px;
       --surface: #f4f7fb;
       --text: #0f172a;
       --muted: #64748b;
@@ -189,7 +190,7 @@
       align-items: stretch;
       gap: var(--gap);
       width: 100%;
-      min-height: 560px;
+      min-height: 0;
       touch-action: none;
     }
 
@@ -200,6 +201,7 @@
       gap: var(--gap);
       min-width: 0;
       flex: 1 1 0%;
+      height: auto;
       transition: opacity 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
     }
 
@@ -256,8 +258,9 @@
       border-radius: var(--radius);
       background: #fff;
       box-shadow: var(--shadow);
-      min-height: 80px;
-      flex: 1 1 0%;
+      flex: 0 0 auto;
+      height: calc(var(--row-weight, 1) * var(--tile-unit));
+      min-height: calc(var(--row-weight, 1) * var(--tile-unit));
       isolation: isolate;
     }
 
@@ -379,6 +382,38 @@
       font-size: 0.95rem;
     }
 
+    .bento-item__close {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      z-index: 25;
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      border: 0;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: rgba(15, 23, 42, 0.55);
+      backdrop-filter: blur(6px);
+      color: #fff;
+      font-size: 1.25rem;
+      line-height: 1;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.15s ease, background 0.15s ease, transform 0.15s ease;
+    }
+
+    .bento-item:hover .bento-item__close,
+    .preview-stage--mobile .bento-item__close {
+      opacity: 1;
+    }
+
+    .bento-item__close:hover {
+      background: rgba(185, 28, 28, 0.85);
+      transform: scale(1.05);
+    }
+
     .empty-state {
       width: 100%;
       padding: 48px 24px;
@@ -389,20 +424,43 @@
       background: #fff;
     }
 
-    .layout-export {
-      margin-top: 4px;
+    .html-export {
+      margin-top: 32px;
+      padding: 20px;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
     }
 
-    .layout-export textarea {
+    .html-export__header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .html-export__header label {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .html-export textarea {
       width: 100%;
-      min-height: 72px;
-      margin-top: 8px;
-      padding: 10px 12px;
+      min-height: 320px;
+      margin-top: 10px;
+      padding: 14px;
       border: 1px solid var(--border);
-      border-radius: 10px;
+      border-radius: 12px;
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: 0.8rem;
+      font-size: 0.78rem;
+      line-height: 1.55;
       resize: vertical;
+      background: #0f172a;
+      color: #e2e8f0;
     }
 
     .view-toggle {
@@ -485,12 +543,8 @@
       max-width: none;
     }
 
-    .preview-stage--mobile .bento-grid {
-      min-height: 560px;
-    }
-
     .preview-stage--mobile .bento-item {
-      min-height: 90px;
+      min-height: calc(var(--row-weight, 1) * 120px);
     }
 
     .preview-stage--mobile .resize-handle,
@@ -499,12 +553,8 @@
     }
 
     @media (max-width: 1024px) {
-      .preview-stage--desktop .bento-grid {
-        min-height: 480px;
-      }
-
       .preview-stage--desktop .bento-item {
-        min-height: 100px;
+        min-height: calc(var(--row-weight, 1) * 120px);
       }
     }
 
@@ -527,8 +577,8 @@
       }
 
       .preview-stage--desktop .bento-item {
-        flex: none !important;
-        min-height: 220px;
+        flex: 0 0 auto !important;
+        min-height: calc(var(--row-weight, 1) * 180px);
       }
 
       .preview-stage--desktop .resize-handle,
@@ -543,8 +593,8 @@
     <header>
       <h1>Bento Grid Layout Tester</h1>
       <p>
-        Use <strong>Desktop</strong> or <strong>Mobile</strong> preview to switch layouts. On desktop, drag handles
-        to resize tiles or <strong>⋮⋮</strong> to reorder columns.
+        Use <strong>Desktop</strong> or <strong>Mobile</strong> preview to switch layouts. The HTML export below
+        updates live — copy and paste it into your site.
       </p>
     </header>
 
@@ -560,7 +610,6 @@
             <option value="demo10" selected>Demo — 10 tiles (reference)</option>
             <option value="demo7">Demo — 7 tiles</option>
             <option value="count">Use count only</option>
-            <option value="custom">Custom JSON</option>
           </select>
         </div>
         <div class="field">
@@ -572,29 +621,15 @@
         </div>
       </div>
 
-      <div class="field" id="jsonField" hidden>
-        <label for="customJson">Custom tiles JSON</label>
-        <textarea id="customJson" spellcheck="false"></textarea>
-        <p class="hint">
-          Array of objects: <code>{ "title": "...", "category": "...", "description": "...", "image": "url", "weight": 4 }</code>.
-          Omit weight to auto-size.
-        </p>
-      </div>
-
       <div class="btn-row">
         <button type="button" class="btn-primary" id="renderBtn">Render grid</button>
         <button type="button" class="btn-secondary" id="addBtn">+ Add one box</button>
         <button type="button" class="btn-danger" id="removeBtn">− Remove last box</button>
         <button type="button" class="btn-secondary" id="resetBtn">Reset to demo</button>
         <button type="button" class="btn-secondary" id="resetLayoutBtn">Reset sizes</button>
-        <button type="button" class="btn-secondary" id="copyLayoutBtn">Copy layout JSON</button>
       </div>
 
       <div class="stats" id="stats"></div>
-      <div class="layout-export" id="layoutExport" hidden>
-        <label class="hint" for="layoutJson">Current layout weights</label>
-        <textarea id="layoutJson" readonly spellcheck="false"></textarea>
-      </div>
     </section>
 
     <div class="preview-stage preview-stage--desktop" id="previewStage">
@@ -607,6 +642,15 @@
         <div class="bento-grid" id="bentoGrid" aria-live="polite"></div>
       </div>
     </div>
+
+    <section class="html-export" id="htmlExport" hidden>
+      <div class="html-export__header">
+        <label for="htmlOutput">Export HTML</label>
+        <button type="button" class="btn-secondary" id="copyHtmlBtn">Copy HTML</button>
+      </div>
+      <p class="hint">Live code for your layout — updates when you resize, reorder columns, or remove tiles.</p>
+      <textarea id="htmlOutput" readonly spellcheck="false" aria-label="Generated HTML export"></textarea>
+    </section>
   </div>
 
   <script>
@@ -655,23 +699,31 @@
 
     const itemCountInput = document.getElementById("itemCount");
     const presetSelect = document.getElementById("preset");
-    const jsonField = document.getElementById("jsonField");
-    const customJsonInput = document.getElementById("customJson");
     const bentoGrid = document.getElementById("bentoGrid");
     const stats = document.getElementById("stats");
-    const layoutExport = document.getElementById("layoutExport");
-    const layoutJson = document.getElementById("layoutJson");
+    const htmlExport = document.getElementById("htmlExport");
+    const htmlOutput = document.getElementById("htmlOutput");
     const previewStage = document.getElementById("previewStage");
     const previewLabel = document.getElementById("previewLabel");
     const viewDesktopBtn = document.getElementById("viewDesktop");
     const viewMobileBtn = document.getElementById("viewMobile");
 
     const MIN_FLEX = 0.08;
+    const TILE_UNIT = 140;
+    const TILE_UNIT_MOBILE = 120;
+    const LAYOUT_GAP = 16;
     let previewMode = window.matchMedia("(max-width: 640px)").matches ? "mobile" : "desktop";
-    let layoutState = { key: "", columnFlex: [], rowFlex: [], columnTileIndexes: [] };
+    let layoutState = {
+      key: "",
+      columnFlex: [],
+      rowFlex: [],
+      columnTileIndexes: [],
+      tileHeightPx: null
+    };
     let activeDrag = null;
     let columnDrag = null;
     let currentTiles = [];
+    let activeTiles = null;
     let currentColumnCount = 3;
 
     function getColumnCount() {
@@ -699,7 +751,7 @@
       if (previewMode === mode) return;
       previewMode = mode;
       updatePreviewChrome();
-      renderGrid();
+      renderGrid({ preserveLayout: true, useActiveTiles: true });
     }
 
     function makeGenericTile(index) {
@@ -754,14 +806,17 @@
 
     function buildDefaultLayoutState(tiles, columnCount) {
       const columnTileIndexes = distributeToColumns(tiles.length, columnCount);
+      const initialRowFlex = columnTileIndexes.map((tileIndexes, columnIndex) => {
+        const weights = getColumnWeights(tileIndexes.length, columnIndex);
+        return tileIndexes.map((tileIndex, position) => tiles[tileIndex].weight ?? weights[position] ?? 1);
+      });
+      const { rowFlex, tileHeightPx } = finalizeLayoutWeights(initialRowFlex, columnTileIndexes);
 
       return {
         key: getLayoutKey(tiles, columnCount),
         columnFlex: Array(columnCount).fill(1),
-        rowFlex: columnTileIndexes.map((tileIndexes, columnIndex) => {
-          const weights = getColumnWeights(tileIndexes.length, columnIndex);
-          return tileIndexes.map((tileIndex, position) => tiles[tileIndex].weight ?? weights[position] ?? 1);
-        }),
+        rowFlex,
+        tileHeightPx,
         columnTileIndexes
       };
     }
@@ -780,9 +835,17 @@
         layoutState.columnTileIndexes = defaultState.columnTileIndexes;
         layoutState.rowFlex = defaultState.rowFlex;
         layoutState.columnFlex = defaultState.columnFlex;
+        layoutState.tileHeightPx = defaultState.tileHeightPx;
       }
 
       return layoutState;
+    }
+
+    function recomputeTileHeights() {
+      layoutState.tileHeightPx = computeTileHeightPx(
+        layoutState.rowFlex,
+        layoutState.columnTileIndexes
+      );
     }
 
     function swapColumns(fromIndex, toIndex) {
@@ -795,6 +858,7 @@
       swap(layoutState.columnTileIndexes);
       swap(layoutState.rowFlex);
       swap(layoutState.columnFlex);
+      recomputeTileHeights();
     }
 
     function getColumnIndexAtX(clientX) {
@@ -838,35 +902,289 @@
       return Math.min(max, Math.max(min, value));
     }
 
+    function getTileUnit() {
+      return previewMode === "mobile" ? TILE_UNIT_MOBILE : TILE_UNIT;
+    }
+
+    function weightToHeight(weight) {
+      return weight * getTileUnit();
+    }
+
+    function applyTileHeight(element, weight) {
+      const height = Math.round(weightToHeight(weight));
+      element.style.setProperty("--row-weight", String(weight));
+      element.style.flex = "0 0 auto";
+      element.style.height = `${height}px`;
+      element.style.minHeight = `${height}px`;
+    }
+
+    function applyTileHeightPx(element, heightPx, weight) {
+      element.style.setProperty("--row-weight", String(weight));
+      element.style.flex = "0 0 auto";
+      element.style.height = `${heightPx}px`;
+      element.style.minHeight = `${heightPx}px`;
+    }
+
+    function sumColumnWeights(weights) {
+      return weights.reduce((sum, weight) => sum + weight, 0);
+    }
+
+    function applyTileFromLayout(element, columnIndex, rowIndex, weight) {
+      const heightPx = layoutState.tileHeightPx?.[columnIndex]?.[rowIndex];
+      if (heightPx) {
+        applyTileHeightPx(element, heightPx, weight);
+      } else {
+        applyTileHeight(element, weight);
+      }
+    }
+
+    function equalizeSharedRowWeights(rowFlex, columnTileIndexes) {
+      const result = rowFlex.map((columnFlex) => [...columnFlex]);
+      const maxRows = Math.max(...columnTileIndexes.map((column) => column.length), 0);
+
+      for (let rowIndex = 0; rowIndex < maxRows; rowIndex += 1) {
+        const columnsAtRow = columnTileIndexes
+          .map((column, columnIndex) => ({ columnIndex, hasTile: rowIndex < column.length }))
+          .filter(({ hasTile }) => hasTile);
+
+        if (columnsAtRow.length < 2) continue;
+
+        const averageWeight = columnsAtRow.reduce(
+          (sum, { columnIndex }) => sum + result[columnIndex][rowIndex],
+          0
+        ) / columnsAtRow.length;
+
+        columnsAtRow.forEach(({ columnIndex }) => {
+          result[columnIndex][rowIndex] = averageWeight;
+        });
+      }
+
+      return result;
+    }
+
+    function computeTileHeightPx(rowFlex, columnTileIndexes) {
+      const tileHeightPx = columnTileIndexes.map((column, columnIndex) =>
+        column.map((_, rowIndex) => {
+          const peerColumns = columnTileIndexes
+            .map((peerColumn, peerIndex) => (rowIndex < peerColumn.length ? peerIndex : -1))
+            .filter((peerIndex) => peerIndex >= 0);
+
+          if (peerColumns.length >= 2) {
+            const averageWeight = peerColumns.reduce(
+              (sum, peerIndex) => sum + rowFlex[peerIndex][rowIndex],
+              0
+            ) / peerColumns.length;
+            return Math.round(weightToHeight(averageWeight));
+          }
+
+          return Math.round(weightToHeight(rowFlex[columnIndex][rowIndex]));
+        })
+      );
+
+      const columnHeights = columnTileIndexes.map((column, columnIndex) => {
+        if (!column.length) return 0;
+        const tileSum = tileHeightPx[columnIndex].reduce((sum, height) => sum + height, 0);
+        return tileSum + (column.length - 1) * LAYOUT_GAP;
+      });
+      const maxColumnHeight = Math.max(...columnHeights.filter((height) => height > 0), 0);
+
+      return tileHeightPx.map((columnHeightsPx, columnIndex) => {
+        const column = columnTileIndexes[columnIndex];
+        if (!column.length) return columnHeightsPx;
+
+        const deficit = maxColumnHeight - columnHeights[columnIndex];
+        if (deficit <= 0) return columnHeightsPx;
+
+        const next = [...columnHeightsPx];
+        next[next.length - 1] += Math.round(deficit);
+        return next;
+      });
+    }
+
+    function finalizeLayoutWeights(rowFlex, columnTileIndexes) {
+      const balanced = equalizeSharedRowWeights(rowFlex, columnTileIndexes);
+
+      return {
+        rowFlex: balanced,
+        tileHeightPx: computeTileHeightPx(balanced, columnTileIndexes)
+      };
+    }
+
     function applyFlexToGrid() {
       const columns = bentoGrid.querySelectorAll(".bento-column");
 
-      columns.forEach((column, columnIndex) => {
+      columns.forEach((column) => {
+        const columnIndex = Number(column.dataset.column);
         column.style.flex = `${layoutState.columnFlex[columnIndex] ?? 1} 1 0%`;
 
         const items = column.querySelectorAll(".bento-item");
         items.forEach((item, rowIndex) => {
-          item.style.flex = `${layoutState.rowFlex[columnIndex]?.[rowIndex] ?? 1} 1 0%`;
+          const weight = layoutState.rowFlex[columnIndex]?.[rowIndex] ?? 1;
+          if (activeDrag) {
+            applyTileHeight(item, weight);
+          } else {
+            applyTileFromLayout(item, columnIndex, rowIndex, weight);
+          }
         });
       });
     }
 
-    function getLayoutSnapshot() {
-      return {
-        columnFlex: layoutState.columnFlex.map((value) => Number(value.toFixed(3))),
-        rowFlex: layoutState.rowFlex.map((column) => column.map((value) => Number(value.toFixed(3)))),
-        columnTileIndexes: layoutState.columnTileIndexes.map((column) => [...column])
-      };
+    const EXPORT_CSS = `.bento-wrap {
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.bento-grid {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  width: 100%;
+}
+
+.bento-column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  flex: 1 1 0%;
+}
+
+.bento-item {
+  position: relative;
+  overflow: hidden;
+  border-radius: 24px;
+  background: #fff;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  flex: 0 0 auto;
+}
+
+.bento-item__media {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+}
+
+.bento-item__media::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.05) 0%, rgba(15, 23, 42, 0.55) 100%);
+}
+
+.bento-item__content {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 22px 24px 24px;
+  color: #fff;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0) 0%, rgba(15, 23, 42, 0.45) 100%);
+}
+
+.bento-item__category {
+  margin: 0 0 8px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  opacity: 0.88;
+}
+
+.bento-item__title {
+  margin: 0;
+  font-size: clamp(1.05rem, 1.35vw, 1.45rem);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+@media (max-width: 640px) {
+  .bento-grid {
+    flex-direction: column;
+  }
+
+  .bento-column {
+    flex: none;
+    width: 100%;
+  }
+}`;
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
     }
 
-    function updateLayoutExport() {
-      if (!isEditableLayout() || !currentTiles.length) {
-        layoutExport.hidden = true;
+    function getTileBackgroundStyle(image) {
+      if (!image) {
+        return "background-image: linear-gradient(135deg, #93c5fd, #67e8f9);";
+      }
+
+      if (image.startsWith("http")) {
+        return `background-image: linear-gradient(180deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.22)), url("${image}");`;
+      }
+
+      return `background-image: linear-gradient(180deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.22)), ${image};`;
+    }
+
+    function generateExportHtml() {
+      const tiles = activeTiles || currentTiles;
+      if (!tiles.length || !layoutState.columnTileIndexes.length) {
+        return "<!-- Add tiles to generate HTML -->";
+      }
+
+      const columnsHtml = layoutState.columnTileIndexes.map((tileIndexes, columnIndex) => {
+        const columnFlex = (layoutState.columnFlex[columnIndex] ?? 1).toFixed(3);
+        const itemsHtml = tileIndexes.map((tileIndex, rowIndex) => {
+          const tile = tiles[tileIndex];
+          if (!tile) return "";
+
+          const weight = layoutState.rowFlex[columnIndex]?.[rowIndex] ?? 1;
+          const tileHeight = layoutState.tileHeightPx?.[columnIndex]?.[rowIndex]
+            ?? Math.round(weightToHeight(weight));
+          const category = escapeHtml(tile.category ?? "");
+          const title = escapeHtml(tile.title ?? `Tile ${tileIndex + 1}`);
+          const mediaStyle = getTileBackgroundStyle(tile.image);
+
+          return [
+            "      <article class=\"bento-item\" style=\"height: " + tileHeight + "px; min-height: " + tileHeight + "px\">",
+            "        <div class=\"bento-item__media\" style=\"" + mediaStyle + "\"></div>",
+            "        <div class=\"bento-item__content\">",
+            "          <p class=\"bento-item__category\">" + category + "</p>",
+            "          <h2 class=\"bento-item__title\">" + title + "</h2>",
+            "        </div>",
+            "      </article>"
+          ].join("\n");
+        }).filter(Boolean).join("\n");
+
+        return [
+          "    <div class=\"bento-column\" style=\"flex: " + columnFlex + " 1 0\">",
+          itemsHtml,
+          "    </div>"
+        ].join("\n");
+      }).join("\n");
+
+      return [
+        "<style>",
+        EXPORT_CSS,
+        "</style>",
+        "",
+        "<div class=\"bento-wrap\">",
+        "  <div class=\"bento-grid\">",
+        columnsHtml,
+        "  </div>",
+        "</div>"
+      ].join("\n");
+    }
+
+    function updateHtmlExport() {
+      if (!currentTiles.length && !(activeTiles && activeTiles.length)) {
+        htmlExport.hidden = true;
+        htmlOutput.value = "";
         return;
       }
 
-      layoutExport.hidden = false;
-      layoutJson.value = JSON.stringify(getLayoutSnapshot(), null, 2);
+      htmlExport.hidden = false;
+      htmlOutput.value = generateExportHtml();
     }
 
     function getDemoTiles(preset, count) {
@@ -879,29 +1197,10 @@
       }));
     }
 
-    function parseCustomTiles(raw) {
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) {
-        throw new Error("Custom JSON must be an array of tile objects.");
-      }
-
-      return parsed.map((tile, index) => ({
-        category: tile.category ?? `Category ${index + 1}`,
-        title: tile.title ?? `Tile ${index + 1}`,
-        description: tile.description ?? "",
-        image: tile.image ?? PLACEHOLDER_GRADIENTS[index % PLACEHOLDER_GRADIENTS.length],
-        weight: tile.weight
-      }));
-    }
-
     function resolveTiles() {
       const preset = presetSelect.value;
       const count = Math.max(0, Math.min(24, Number(itemCountInput.value) || 0));
       itemCountInput.value = String(count);
-
-      if (preset === "custom") {
-        return parseCustomTiles(customJsonInput.value);
-      }
 
       if (preset === "demo10" || preset === "demo7") {
         return getDemoTiles(preset, count || (preset === "demo7" ? DEMO_7.length : DEMO_10.length));
@@ -910,13 +1209,81 @@
       return buildTilesFromCount(count);
     }
 
-    function getGridHeight(tileCount, columnCount) {
-      if (columnCount === 1) {
-        return null;
+    function rebalanceLayoutAfterRemoval(removedIndex) {
+      const columnCount = getColumnCount();
+      let removedColumn = -1;
+      let removedRow = -1;
+
+      layoutState.columnTileIndexes.forEach((column, columnIndex) => {
+        const rowIndex = column.indexOf(removedIndex);
+        if (rowIndex !== -1) {
+          removedColumn = columnIndex;
+          removedRow = rowIndex;
+        }
+      });
+
+      const removedColumnFlex = removedColumn >= 0
+        ? [...layoutState.rowFlex[removedColumn]]
+        : [];
+
+      layoutState.columnTileIndexes = layoutState.columnTileIndexes.map((column) =>
+        column
+          .filter((index) => index !== removedIndex)
+          .map((index) => (index > removedIndex ? index - 1 : index))
+      );
+
+      layoutState.rowFlex = layoutState.rowFlex.map((columnFlex, columnIndex) => {
+        const tileCount = layoutState.columnTileIndexes[columnIndex].length;
+        if (!tileCount) return [];
+
+        if (columnIndex !== removedColumn) {
+          return columnFlex.slice(0, tileCount);
+        }
+
+        const removedWeight = removedColumnFlex[removedRow] ?? 0;
+        const topWeights = removedColumnFlex.slice(0, removedRow);
+        const bottomWeights = removedColumnFlex.slice(removedRow + 1);
+
+        if (!bottomWeights.length) {
+          if (!topWeights.length) return [];
+          const nearestIndex = topWeights.length - 1;
+          topWeights[nearestIndex] += removedWeight;
+          return topWeights;
+        }
+
+        const bottomTotal = sumColumnWeights(bottomWeights) + removedWeight;
+        const equalBottom = bottomTotal / bottomWeights.length;
+        return [
+          ...topWeights,
+          ...Array(bottomWeights.length).fill(equalBottom)
+        ];
+      });
+
+      const finalized = finalizeLayoutWeights(layoutState.rowFlex, layoutState.columnTileIndexes);
+      layoutState.rowFlex = finalized.rowFlex;
+      layoutState.tileHeightPx = finalized.tileHeightPx;
+      layoutState.key = getLayoutKey(activeTiles, columnCount);
+    }
+
+    function removeTileAt(tileIndex) {
+      if (!activeTiles || tileIndex < 0 || tileIndex >= activeTiles.length) return;
+
+      activeTiles.splice(tileIndex, 1);
+      itemCountInput.value = String(activeTiles.length);
+
+      if (presetSelect.value.startsWith("demo")) {
+        presetSelect.value = "count";
       }
 
-      const rows = Math.ceil(tileCount / columnCount);
-      return Math.min(920, Math.max(520, 420 + rows * 90));
+      if (!activeTiles.length) {
+        layoutState = { key: "", columnFlex: [], rowFlex: [], columnTileIndexes: [], tileHeightPx: null };
+        renderGrid({ useActiveTiles: true });
+        return;
+      }
+
+      rebalanceLayoutAfterRemoval(tileIndex);
+      renderGrid({ preserveLayout: true, useActiveTiles: true });
+      updateHtmlExport();
     }
 
     function renderTile(tile, index, columnIndex, rowIndex, columnCount, rowCount) {
@@ -924,7 +1291,8 @@
       article.className = "bento-item";
       article.dataset.column = String(columnIndex);
       article.dataset.row = String(rowIndex);
-      article.style.flex = `${layoutState.rowFlex[columnIndex]?.[rowIndex] ?? tile.weight ?? 1} 1 0%`;
+      const weight = layoutState.rowFlex[columnIndex]?.[rowIndex] ?? tile.weight ?? 1;
+      applyTileFromLayout(article, columnIndex, rowIndex, weight);
 
       const media = document.createElement("div");
       media.className = "bento-item__media";
@@ -951,6 +1319,18 @@
 
       content.append(category, title);
       article.append(media, badge, content);
+
+      const closeBtn = document.createElement("button");
+      closeBtn.type = "button";
+      closeBtn.className = "bento-item__close";
+      closeBtn.setAttribute("aria-label", `Remove ${tile.title}`);
+      closeBtn.textContent = "×";
+      closeBtn.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        removeTileAt(index);
+      });
+      article.appendChild(closeBtn);
 
       if (isEditableLayout()) {
         if (rowIndex < rowCount - 1) {
@@ -1032,7 +1412,7 @@
 
       if (shouldSwap) {
         swapColumns(fromIndex, overIndex);
-        renderGrid({ preserveLayout: true });
+        renderGrid({ preserveLayout: true, useActiveTiles: true });
       }
     }
 
@@ -1120,8 +1500,11 @@
       } = activeDrag;
 
       if (type === "row" || type === "corner") {
-        const rowGapTotal = gap * (layoutState.rowFlex[columnIndex].length - 1);
-        const usableHeight = columnRect.height - rowGapTotal;
+        const topItem = activeDrag.items[rowIndex];
+        const bottomItem = activeDrag.items[rowIndex + 1];
+        const topHeight = topItem?.getBoundingClientRect().height ?? weightToHeight(startTopFlex);
+        const bottomHeight = bottomItem?.getBoundingClientRect().height ?? weightToHeight(startBottomFlex);
+        const usableHeight = topHeight + bottomHeight + gap;
         const totalRowFlex = startTopFlex + startBottomFlex;
         const deltaRatio = (event.clientY - startY) / usableHeight;
         const nextTop = clampFlex(startTopFlex + deltaRatio * totalRowFlex, MIN_FLEX, totalRowFlex - MIN_FLEX);
@@ -1142,7 +1525,7 @@
       }
 
       applyFlexToGrid();
-      updateLayoutExport();
+      updateHtmlExport();
     }
 
     function endDrag(event) {
@@ -1157,9 +1540,17 @@
         /* ignore */
       }
 
+      const wasRowResize = activeDrag.type === "row" || activeDrag.type === "corner";
       activeDrag = null;
       document.body.classList.remove("is-resizing");
       document.body.style.cursor = "";
+
+      if (wasRowResize) {
+        recomputeTileHeights();
+        applyFlexToGrid();
+      }
+
+      updateHtmlExport();
     }
 
     document.addEventListener("pointermove", (event) => {
@@ -1176,26 +1567,34 @@
     });
 
     function renderGrid(options = {}) {
-      const { forceResetLayout = false, preserveLayout = false } = options;
+      const { forceResetLayout = false, preserveLayout = false, useActiveTiles = false } = options;
 
       if (activeDrag || columnDrag) return;
 
       bentoGrid.innerHTML = "";
 
       let tiles;
-      try {
-        tiles = resolveTiles();
-      } catch (error) {
-        bentoGrid.innerHTML = `<div class="empty-state">${error.message}</div>`;
-        stats.innerHTML = `<span><strong>Error:</strong> invalid custom JSON</span>`;
-        layoutExport.hidden = true;
-        return;
+
+      if (useActiveTiles && activeTiles) {
+        tiles = activeTiles;
+      } else {
+        try {
+          tiles = resolveTiles();
+          activeTiles = tiles.map((tile) => ({ ...tile }));
+        } catch (error) {
+          bentoGrid.innerHTML = `<div class="empty-state">${error.message}</div>`;
+          stats.innerHTML = `<span><strong>Error:</strong> could not render grid</span>`;
+          htmlExport.hidden = true;
+          return;
+        }
       }
 
       if (!tiles.length) {
         bentoGrid.innerHTML = `<div class="empty-state">No tiles to display. Increase the box count or load a demo preset.</div>`;
         stats.innerHTML = `<span><strong>0</strong> tiles rendered</span>`;
-        layoutExport.hidden = true;
+        htmlExport.hidden = true;
+        htmlOutput.value = "";
+        activeTiles = [];
         return;
       }
 
@@ -1206,11 +1605,9 @@
         ensureLayoutState(tiles, currentColumnCount, forceResetLayout);
       }
 
-      const gridHeight = getGridHeight(tiles.length, currentColumnCount);
-
-      bentoGrid.style.minHeight = gridHeight ? `${gridHeight}px` : "";
-
       layoutState.columnTileIndexes.forEach((tileIndexes, columnIndex) => {
+        if (!tileIndexes.length) return;
+
         const column = document.createElement("div");
         column.className = "bento-column";
         column.dataset.column = String(columnIndex);
@@ -1241,8 +1638,8 @@
 
       const columnSizes = layoutState.columnTileIndexes.map((column) => column.length).join(" + ");
       const editHint = previewMode === "desktop"
-        ? "Resize with edge handles · reorder columns with ⋮⋮ grip"
-        : "Mobile preview · 2 columns · view only";
+        ? "Resize with handles · reorder columns · click × to remove"
+        : "Mobile preview · click × to remove tiles";
 
       stats.innerHTML = `
         <span><strong>${tiles.length}</strong> tile${tiles.length === 1 ? "" : "s"} rendered</span>
@@ -1250,15 +1647,7 @@
         <span>${editHint}</span>
       `;
 
-      updateLayoutExport();
-    }
-
-    function toggleJsonField() {
-      const isCustom = presetSelect.value === "custom";
-      jsonField.hidden = !isCustom;
-      if (isCustom && !customJsonInput.value.trim()) {
-        customJsonInput.value = JSON.stringify(DEMO_10, null, 2);
-      }
+      updateHtmlExport();
     }
 
     viewDesktopBtn.addEventListener("click", () => setPreviewMode("desktop"));
@@ -1278,20 +1667,19 @@
     document.getElementById("resetBtn").addEventListener("click", () => {
       presetSelect.value = "demo10";
       itemCountInput.value = "10";
-      toggleJsonField();
       renderGrid({ forceResetLayout: true });
     });
     document.getElementById("resetLayoutBtn").addEventListener("click", () => {
       renderGrid({ forceResetLayout: true });
     });
-    document.getElementById("copyLayoutBtn").addEventListener("click", async () => {
-      updateLayoutExport();
-      const payload = layoutJson.value;
+    document.getElementById("copyHtmlBtn").addEventListener("click", async () => {
+      updateHtmlExport();
+      const payload = htmlOutput.value;
       try {
         await navigator.clipboard.writeText(payload);
-        stats.innerHTML += `<span><strong>Layout copied</strong></span>`;
+        stats.innerHTML += `<span><strong>HTML copied</strong></span>`;
       } catch (_) {
-        layoutJson.select();
+        htmlOutput.select();
         document.execCommand("copy");
       }
     });
@@ -1302,19 +1690,12 @@
     });
 
     presetSelect.addEventListener("change", () => {
-      toggleJsonField();
       if (presetSelect.value === "demo10") itemCountInput.value = "10";
       if (presetSelect.value === "demo7") itemCountInput.value = "7";
       renderGrid({ forceResetLayout: true });
     });
 
-    customJsonInput.addEventListener("input", () => {
-      presetSelect.value = "custom";
-      toggleJsonField();
-    });
-
     updatePreviewChrome();
-    toggleJsonField();
     renderGrid();
   </script>
 </body>
