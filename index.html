@@ -602,8 +602,8 @@
     <header>
       <h1>Bento Grid Layout Tester</h1>
       <p>
-        Use <strong>Desktop</strong> or <strong>Mobile</strong> preview to switch layouts. The HTML export below
-        updates live — copy and paste it into your site.
+        Use <strong>Desktop</strong> to design the layout, then copy the HTML export — it includes
+        <strong>desktop + mobile responsive CSS</strong> in one snippet. Use <strong>Mobile</strong> preview to check the phone layout.
       </p>
     </header>
 
@@ -657,7 +657,7 @@
         <label for="htmlOutput">Export HTML</label>
         <button type="button" class="btn-secondary" id="copyHtmlBtn">Copy HTML</button>
       </div>
-      <p class="hint">Live code for your layout — updates when you resize, reorder columns, or remove tiles.</p>
+      <p class="hint">Desktop layout with responsive mobile styles (@640px) — updates when you resize, reorder, or remove tiles. Add a viewport meta tag in your page head.</p>
       <textarea id="htmlOutput" readonly spellcheck="false" aria-label="Generated HTML export"></textarea>
     </section>
   </div>
@@ -730,6 +730,7 @@
       columnTileIndexes: [],
       tileHeightPx: null
     };
+    let desktopExportState = null;
     let activeDrag = null;
     let columnDrag = null;
     let currentTiles = [];
@@ -1041,7 +1042,7 @@
       return result;
     }
 
-    function computeTileHeightPx(rowFlex, columnTileIndexes) {
+    function computeTileHeightPx(rowFlex, columnTileIndexes, tileUnit = getTileUnit()) {
       const tileHeightPx = columnTileIndexes.map((column, columnIndex) =>
         column.map((_, rowIndex) => {
           const peerColumns = columnTileIndexes
@@ -1053,10 +1054,10 @@
               (sum, peerIndex) => sum + rowFlex[peerIndex][rowIndex],
               0
             ) / peerColumns.length;
-            return Math.max(MIN_TILE_HEIGHT, Math.round(weightToHeight(averageWeight)));
+            return Math.max(MIN_TILE_HEIGHT, Math.round(averageWeight * tileUnit));
           }
 
-          return Math.max(MIN_TILE_HEIGHT, Math.round(weightToHeight(rowFlex[columnIndex][rowIndex])));
+          return Math.max(MIN_TILE_HEIGHT, Math.round(rowFlex[columnIndex][rowIndex] * tileUnit));
         })
       );
 
@@ -1115,6 +1116,8 @@
   background: #fff;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
   flex: 0 0 auto;
+  height: var(--desktop-h);
+  min-height: var(--desktop-h);
 }
 
 .bento-item__media {
@@ -1154,13 +1157,23 @@
 }
 
 @media (max-width: 640px) {
+  .bento-wrap {
+    max-width: none;
+  }
+
   .bento-grid {
     flex-direction: column;
+    gap: 12px;
   }
 
   .bento-column {
-    flex: none;
+    display: contents;
+  }
+
+  .bento-item {
     width: 100%;
+    height: var(--mobile-h, var(--desktop-h));
+    min-height: var(--mobile-h, var(--desktop-h));
   }
 }`;
 
@@ -1184,27 +1197,77 @@
       return `background-image: linear-gradient(180deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.22)), ${image};`;
     }
 
+    function cloneLayoutState(state) {
+      return {
+        key: state.key,
+        columnFlex: [...state.columnFlex],
+        rowFlex: state.rowFlex.map((column) => [...column]),
+        columnTileIndexes: state.columnTileIndexes.map((column) => [...column]),
+        tileHeightPx: state.tileHeightPx?.map((column) => [...column]) ?? null
+      };
+    }
+
+    function syncDesktopExportState() {
+      if (previewMode !== "desktop" || !layoutState.columnTileIndexes.length) return;
+      desktopExportState = cloneLayoutState(layoutState);
+    }
+
+    function scaleExportMobileHeight(desktopPx) {
+      return Math.max(MIN_TILE_HEIGHT, Math.round(desktopPx * TILE_UNIT_MOBILE / TILE_UNIT));
+    }
+
+    function buildDesktopExportLayoutState(tiles) {
+      const columnCount = 3;
+      const columnTileIndexes = distributeToColumns(tiles.length, columnCount);
+      const initialRowFlex = columnTileIndexes.map((tileIndexes, columnIndex) => {
+        const weights = getColumnWeights(tileIndexes.length, columnIndex);
+        return tileIndexes.map((tileIndex, position) => tiles[tileIndex].weight ?? weights[position] ?? 1);
+      });
+      const balanced = equalizeSharedRowWeights(initialRowFlex, columnTileIndexes);
+
+      return {
+        columnFlex: Array(columnCount).fill(1),
+        rowFlex: balanced,
+        columnTileIndexes,
+        tileHeightPx: computeTileHeightPx(balanced, columnTileIndexes, TILE_UNIT)
+      };
+    }
+
+    function getExportLayoutState() {
+      if (desktopExportState) return desktopExportState;
+      if (previewMode === "desktop" && layoutState.columnTileIndexes.length) {
+        return layoutState;
+      }
+
+      const tiles = activeTiles || currentTiles;
+      if (!tiles.length) return layoutState;
+      return buildDesktopExportLayoutState(tiles);
+    }
+
     function generateExportHtml() {
       const tiles = activeTiles || currentTiles;
-      if (!tiles.length || !layoutState.columnTileIndexes.length) {
+      const exportLayout = getExportLayoutState();
+
+      if (!tiles.length || !exportLayout.columnTileIndexes.length) {
         return "<!-- Add tiles to generate HTML -->";
       }
 
-      const columnsHtml = layoutState.columnTileIndexes.map((tileIndexes, columnIndex) => {
-        const columnFlex = (layoutState.columnFlex[columnIndex] ?? 1).toFixed(3);
+      const columnsHtml = exportLayout.columnTileIndexes.map((tileIndexes, columnIndex) => {
+        const columnFlex = (exportLayout.columnFlex[columnIndex] ?? 1).toFixed(3);
         const itemsHtml = tileIndexes.map((tileIndex, rowIndex) => {
           const tile = tiles[tileIndex];
           if (!tile) return "";
 
-          const weight = layoutState.rowFlex[columnIndex]?.[rowIndex] ?? 1;
-          const tileHeight = layoutState.tileHeightPx?.[columnIndex]?.[rowIndex]
-            ?? Math.round(weightToHeight(weight));
+          const weight = exportLayout.rowFlex[columnIndex]?.[rowIndex] ?? 1;
+          const desktopHeight = exportLayout.tileHeightPx?.[columnIndex]?.[rowIndex]
+            ?? Math.max(MIN_TILE_HEIGHT, Math.round((exportLayout.rowFlex[columnIndex]?.[rowIndex] ?? 1) * TILE_UNIT));
+          const mobileHeight = scaleExportMobileHeight(desktopHeight);
           const category = escapeHtml(tile.category ?? "");
           const title = escapeHtml(tile.title ?? `Tile ${tileIndex + 1}`);
           const mediaStyle = getTileBackgroundStyle(tile.image);
 
           return [
-            "      <article class=\"bento-item\" style=\"height: " + tileHeight + "px; min-height: " + tileHeight + "px\">",
+            "      <article class=\"bento-item\" style=\"--desktop-h: " + desktopHeight + "px; --mobile-h: " + mobileHeight + "px\">",
             "        <div class=\"bento-item__media\" style=\"" + mediaStyle + "\"></div>",
             "        <div class=\"bento-item__content\">",
             "          <p class=\"bento-item__category\">" + category + "</p>",
@@ -1222,6 +1285,11 @@
       }).join("\n");
 
       return [
+        "<!--",
+        "  Bento grid — desktop layout + mobile responsive CSS (640px breakpoint).",
+        "  Add to your page <head>:",
+        "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
+        "-->",
         "<style>",
         EXPORT_CSS,
         "</style>",
@@ -1235,6 +1303,8 @@
     }
 
     function updateHtmlExport() {
+      syncDesktopExportState();
+
       if (!currentTiles.length && !(activeTiles && activeTiles.length)) {
         htmlExport.hidden = true;
         htmlOutput.value = "";
