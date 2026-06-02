@@ -547,6 +547,15 @@
       min-height: calc(var(--row-weight, 1) * 120px);
     }
 
+    .preview-stage--mobile .bento-grid {
+      flex-direction: column;
+    }
+
+    .preview-stage--mobile .bento-column {
+      flex: none;
+      width: 100%;
+    }
+
     .preview-stage--mobile .resize-handle,
     .preview-stage--mobile .column-drag-handle {
       display: none;
@@ -708,7 +717,8 @@
     const viewDesktopBtn = document.getElementById("viewDesktop");
     const viewMobileBtn = document.getElementById("viewMobile");
 
-    const MIN_FLEX = 0.08;
+    const MIN_FLEX = 0.35;
+    const MIN_TILE_HEIGHT = 48;
     const TILE_UNIT = 140;
     const TILE_UNIT_MOBILE = 120;
     const LAYOUT_GAP = 16;
@@ -727,7 +737,7 @@
     let currentColumnCount = 3;
 
     function getColumnCount() {
-      return previewMode === "mobile" ? 2 : 3;
+      return previewMode === "mobile" ? 1 : 3;
     }
 
     function isEditableLayout() {
@@ -751,7 +761,7 @@
       if (previewMode === mode) return;
       previewMode = mode;
       updatePreviewChrome();
-      renderGrid({ preserveLayout: true, useActiveTiles: true });
+      renderGrid({ useActiveTiles: true });
     }
 
     function makeGenericTile(index) {
@@ -848,6 +858,25 @@
       );
     }
 
+    function updateTileHeightsAfterRowResize(columnIndex, rowIndex) {
+      if (!layoutState.tileHeightPx?.[columnIndex]) {
+        recomputeTileHeights();
+        return;
+      }
+
+      const next = layoutState.tileHeightPx.map((columnHeights) => [...columnHeights]);
+      next[columnIndex][rowIndex] = Math.max(
+        MIN_TILE_HEIGHT,
+        Math.round(weightToHeight(layoutState.rowFlex[columnIndex][rowIndex]))
+      );
+      next[columnIndex][rowIndex + 1] = Math.max(
+        MIN_TILE_HEIGHT,
+        Math.round(weightToHeight(layoutState.rowFlex[columnIndex][rowIndex + 1]))
+      );
+
+      layoutState.tileHeightPx = applyColumnBottomStretch(next, layoutState.columnTileIndexes);
+    }
+
     function swapColumns(fromIndex, toIndex) {
       if (fromIndex === toIndex) return;
 
@@ -911,7 +940,7 @@
     }
 
     function applyTileHeight(element, weight) {
-      const height = Math.round(weightToHeight(weight));
+      const height = Math.max(MIN_TILE_HEIGHT, Math.round(weightToHeight(weight)));
       element.style.setProperty("--row-weight", String(weight));
       element.style.flex = "0 0 auto";
       element.style.height = `${height}px`;
@@ -919,10 +948,41 @@
     }
 
     function applyTileHeightPx(element, heightPx, weight) {
+      const height = Math.max(MIN_TILE_HEIGHT, heightPx);
       element.style.setProperty("--row-weight", String(weight));
       element.style.flex = "0 0 auto";
-      element.style.height = `${heightPx}px`;
-      element.style.minHeight = `${heightPx}px`;
+      element.style.height = `${height}px`;
+      element.style.minHeight = `${height}px`;
+    }
+
+    function getTileHeightPx(columnIndex, rowIndex, weight) {
+      return layoutState.tileHeightPx?.[columnIndex]?.[rowIndex]
+        ?? Math.max(MIN_TILE_HEIGHT, Math.round(weightToHeight(weight)));
+    }
+
+    function applyColumnBottomStretch(tileHeightPx, columnTileIndexes) {
+      const columnHeights = columnTileIndexes.map((column, columnIndex) => {
+        if (!column.length) return 0;
+        const tileSum = tileHeightPx[columnIndex].reduce((sum, height) => sum + height, 0);
+        return tileSum + (column.length - 1) * LAYOUT_GAP;
+      });
+      const maxColumnHeight = Math.max(...columnHeights.filter((height) => height > 0), 0);
+
+      return tileHeightPx.map((columnHeightsPx, columnIndex) => {
+        const column = columnTileIndexes[columnIndex];
+        if (!column.length) return columnHeightsPx;
+
+        const deficit = maxColumnHeight - columnHeights[columnIndex];
+        if (deficit <= 0) return columnHeightsPx;
+
+        const next = columnHeightsPx.map((height, rowIndex) => {
+          if (rowIndex === column.length - 1) {
+            return Math.max(MIN_TILE_HEIGHT, height + Math.round(deficit));
+          }
+          return height;
+        });
+        return next;
+      });
     }
 
     function sumColumnWeights(weights) {
@@ -930,12 +990,7 @@
     }
 
     function applyTileFromLayout(element, columnIndex, rowIndex, weight) {
-      const heightPx = layoutState.tileHeightPx?.[columnIndex]?.[rowIndex];
-      if (heightPx) {
-        applyTileHeightPx(element, heightPx, weight);
-      } else {
-        applyTileHeight(element, weight);
-      }
+      applyTileHeightPx(element, getTileHeightPx(columnIndex, rowIndex, weight), weight);
     }
 
     function equalizeSharedRowWeights(rowFlex, columnTileIndexes) {
@@ -974,31 +1029,14 @@
               (sum, peerIndex) => sum + rowFlex[peerIndex][rowIndex],
               0
             ) / peerColumns.length;
-            return Math.round(weightToHeight(averageWeight));
+            return Math.max(MIN_TILE_HEIGHT, Math.round(weightToHeight(averageWeight)));
           }
 
-          return Math.round(weightToHeight(rowFlex[columnIndex][rowIndex]));
+          return Math.max(MIN_TILE_HEIGHT, Math.round(weightToHeight(rowFlex[columnIndex][rowIndex])));
         })
       );
 
-      const columnHeights = columnTileIndexes.map((column, columnIndex) => {
-        if (!column.length) return 0;
-        const tileSum = tileHeightPx[columnIndex].reduce((sum, height) => sum + height, 0);
-        return tileSum + (column.length - 1) * LAYOUT_GAP;
-      });
-      const maxColumnHeight = Math.max(...columnHeights.filter((height) => height > 0), 0);
-
-      return tileHeightPx.map((columnHeightsPx, columnIndex) => {
-        const column = columnTileIndexes[columnIndex];
-        if (!column.length) return columnHeightsPx;
-
-        const deficit = maxColumnHeight - columnHeights[columnIndex];
-        if (deficit <= 0) return columnHeightsPx;
-
-        const next = [...columnHeightsPx];
-        next[next.length - 1] += Math.round(deficit);
-        return next;
-      });
+      return applyColumnBottomStretch(tileHeightPx, columnTileIndexes);
     }
 
     function finalizeLayoutWeights(rowFlex, columnTileIndexes) {
@@ -1012,6 +1050,7 @@
 
     function applyFlexToGrid() {
       const columns = bentoGrid.querySelectorAll(".bento-column");
+      const drag = activeDrag;
 
       columns.forEach((column) => {
         const columnIndex = Number(column.dataset.column);
@@ -1020,11 +1059,17 @@
         const items = column.querySelectorAll(".bento-item");
         items.forEach((item, rowIndex) => {
           const weight = layoutState.rowFlex[columnIndex]?.[rowIndex] ?? 1;
-          if (activeDrag) {
+          const isRowDrag = drag && (drag.type === "row" || drag.type === "corner");
+          const isResizingPair = isRowDrag
+            && columnIndex === drag.columnIndex
+            && (rowIndex === drag.rowIndex || rowIndex === drag.rowIndex + 1);
+
+          if (isResizingPair) {
             applyTileHeight(item, weight);
-          } else {
-            applyTileFromLayout(item, columnIndex, rowIndex, weight);
+            return;
           }
+
+          applyTileHeightPx(item, getTileHeightPx(columnIndex, rowIndex, weight), weight);
         });
       });
     }
@@ -1452,7 +1497,13 @@
       const items = [...column.querySelectorAll(".bento-item")];
       const columnRect = column.getBoundingClientRect();
       const gridRect = bentoGrid.getBoundingClientRect();
-      const gap = parseFloat(getComputedStyle(bentoGrid).gap) || 16;
+      const gap = parseFloat(getComputedStyle(bentoGrid).gap) || LAYOUT_GAP;
+      const startTopFlex = layoutState.rowFlex[columnIndex][rowIndex];
+      const startBottomFlex = layoutState.rowFlex[columnIndex][rowIndex + 1] ?? null;
+      const startTopHeight = getTileHeightPx(columnIndex, rowIndex, startTopFlex);
+      const startBottomHeight = startBottomFlex === null
+        ? 0
+        : getTileHeightPx(columnIndex, rowIndex + 1, startBottomFlex);
 
       activeDrag = {
         pointerId: event.pointerId,
@@ -1465,8 +1516,10 @@
         columnRect,
         gridRect,
         gap,
-        startTopFlex: layoutState.rowFlex[columnIndex][rowIndex],
-        startBottomFlex: layoutState.rowFlex[columnIndex][rowIndex + 1] ?? null,
+        startTopFlex,
+        startBottomFlex,
+        startTopHeight,
+        startBottomHeight,
         startLeftColFlex: layoutState.columnFlex[columnIndex],
         startRightColFlex: layoutState.columnFlex[columnIndex + 1] ?? null,
         items
@@ -1500,11 +1553,9 @@
       } = activeDrag;
 
       if (type === "row" || type === "corner") {
-        const topItem = activeDrag.items[rowIndex];
-        const bottomItem = activeDrag.items[rowIndex + 1];
-        const topHeight = topItem?.getBoundingClientRect().height ?? weightToHeight(startTopFlex);
-        const bottomHeight = bottomItem?.getBoundingClientRect().height ?? weightToHeight(startBottomFlex);
-        const usableHeight = topHeight + bottomHeight + gap;
+        if (startBottomFlex === null) return;
+
+        const usableHeight = activeDrag.startTopHeight + activeDrag.startBottomHeight + gap;
         const totalRowFlex = startTopFlex + startBottomFlex;
         const deltaRatio = (event.clientY - startY) / usableHeight;
         const nextTop = clampFlex(startTopFlex + deltaRatio * totalRowFlex, MIN_FLEX, totalRowFlex - MIN_FLEX);
@@ -1531,6 +1582,7 @@
     function endDrag(event) {
       if (!activeDrag || event.pointerId !== activeDrag.pointerId) return;
 
+      const { type, columnIndex, rowIndex } = activeDrag;
       activeDrag.handle.classList.remove("is-active");
       activeDrag.items.forEach((item) => item.classList.remove("is-resizing"));
 
@@ -1540,13 +1592,12 @@
         /* ignore */
       }
 
-      const wasRowResize = activeDrag.type === "row" || activeDrag.type === "corner";
       activeDrag = null;
       document.body.classList.remove("is-resizing");
       document.body.style.cursor = "";
 
-      if (wasRowResize) {
-        recomputeTileHeights();
+      if (type === "row" || type === "corner") {
+        updateTileHeightsAfterRowResize(columnIndex, rowIndex);
         applyFlexToGrid();
       }
 
@@ -1639,7 +1690,7 @@
       const columnSizes = layoutState.columnTileIndexes.map((column) => column.length).join(" + ");
       const editHint = previewMode === "desktop"
         ? "Resize with handles · reorder columns · click × to remove"
-        : "Mobile preview · click × to remove tiles";
+        : "Mobile preview · 1 column · click × to remove tiles";
 
       stats.innerHTML = `
         <span><strong>${tiles.length}</strong> tile${tiles.length === 1 ? "" : "s"} rendered</span>
